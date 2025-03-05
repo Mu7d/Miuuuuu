@@ -1,3 +1,23 @@
+import subprocess
+import sys
+
+def install_and_import(package, import_name=None):
+    """
+    تحاول هذه الدالة استيراد المكتبة، وإذا لم تكن موجودة تقوم بتثبيتها.
+    package: اسم المكتبة للتثبيت عبر pip.
+    import_name: الاسم الذي يتم استخدامه للاستيراد (اختياري).
+    """
+    try:
+        if import_name is None:
+            import_name = package
+        __import__(import_name)
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        __import__(import_name)
+
+# تثبيت مكتبة telebot إذا لم تكن مثبتة
+install_and_import("pyTelegramBotAPI", "telebot")
+
 import os
 import json
 from collections import Counter
@@ -198,13 +218,11 @@ def process_special_state(message):
         bot.send_message(message.chat.id, f"✅ تم تعيين الرسالة الخاصة للرقم الدراسي {student_number}.")
         del special_state[admin_id]
 
-# أمر رفع درجات المواد لكل مادة من القائمة بشكل متتابع
 @bot.message_handler(commands=['uploadsubjects'])
 def start_upload_subjects(message):
     if message.from_user.id not in ADMIN_IDS:
         bot.send_message(message.chat.id, "❌ ليس لديك صلاحية.")
         return
-    # تهيئة الحالة مع قائمة المواد وترتيبها
     upload_state[message.from_user.id] = {
         "subjects": subjects_order.copy(),
         "index": 0
@@ -213,7 +231,6 @@ def start_upload_subjects(message):
     bot.send_message(message.chat.id,
                      f"🔢 يرجى إرسال ملف txt الخاص بمادة: {current_subject}\nالصيغة: رقم دراسي : درجة")
 
-# معالجة الملفات المرسلة أثناء عملية رفع المواد
 @bot.message_handler(func=lambda message: message.from_user.id in upload_state)
 def process_upload_subject_file(message):
     admin_id = message.from_user.id
@@ -236,7 +253,6 @@ def process_upload_subject_file(message):
         bot.send_message(message.chat.id, "❌ حدث خطأ أثناء تحميل الملف.")
         return
     
-    # معالجة محتوى الملف بالتنسيق "رقم دراسي : درجة"
     grades_data = {}
     for line in file_content.splitlines():
         line = line.strip()
@@ -247,10 +263,8 @@ def process_upload_subject_file(message):
         student_number, grade = line.split(":", 1)
         grades_data[student_number.strip()] = grade.strip()
     
-    # تخزين بيانات المادة الحالية
     subject_grades[current_subject] = grades_data
     
-    # حفظ البيانات في ملف JSON
     try:
         with open("subject_grades.json", "w") as f:
             json.dump(subject_grades, f)
@@ -260,7 +274,6 @@ def process_upload_subject_file(message):
     
     bot.send_message(message.chat.id, f"✅ تم رفع بيانات مادة {current_subject} بنجاح.")
     
-    # الانتقال إلى المادة التالية إن وُجدت
     state["index"] += 1
     if state["index"] < len(subjects_list):
         next_subject = subjects_list[state["index"]]
@@ -270,7 +283,6 @@ def process_upload_subject_file(message):
         bot.send_message(message.chat.id, "✅ تم رفع بيانات جميع المواد بنجاح.")
         del upload_state[admin_id]
 
-# أوامر الطلاب (نفس المنطق السابق)
 @bot.message_handler(commands=['start'])
 def student_start(message):
     missing_subjects = [subject for subject in subjects_order if subject not in subject_grades or not subject_grades[subject]]
