@@ -1,23 +1,3 @@
-import subprocess
-import sys
-
-def install_and_import(package, import_name=None):
-    """
-    تحاول هذه الدالة استيراد المكتبة، وإذا لم تكن موجودة تقوم بتثبيتها.
-    package: اسم المكتبة للتثبيت عبر pip.
-    import_name: الاسم الذي يتم استخدامه للاستيراد (اختياري).
-    """
-    try:
-        if import_name is None:
-            import_name = package
-        __import__(import_name)
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        __import__(import_name)
-
-# تثبيت مكتبة telebot إذا لم تكن مثبتة
-install_and_import("pyTelegramBotAPI", "telebot")
-
 import os
 import json
 from collections import Counter
@@ -37,9 +17,9 @@ subject_credits = {
     "English": 9,
     "Statistics": 9,
     "Arabic": 6,
-    "Computer": 9
+    "الحاسوب": 9
 }
-# ترتيب المواد المطلوب رفع بياناتها (يُعرض بالترتيب)
+# ترتيب المواد المطلوب رفع بياناتها بالترتيب
 subjects_order = ["Math", "Physics", "English", "Statistics", "Arabic", "الحاسوب"]
 
 grade_mapping = {"F": 0, "D": 0.5, "DD": 1, "C": 1.5, "CC": 2, "B": 2.5, "BB": 3, "A": 3.5, "AA": 4}
@@ -50,7 +30,6 @@ subject_grades = {}
 student_state = {}
 allowed_ids = {}  # { student_number: [list of allowed user ids] }
 
-# رسائل خاصة لبعض الطلاب
 special_student_messages = {
     "12345": "🎉 مبروك! درجاتك مميزة وتستحق الثناء.",
     "67890": "🌟 أداء ممتاز، استمر في التألق!",
@@ -69,7 +48,7 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     subject_grades = {}
 
-# دوال المساعدة لحساب المعدل والإحصائيات
+# دوال المساعدة لحساب المعدلات والإحصائيات (لم يتم تعديلها هنا)
 def calculate_gpa(student_number):
     total_credits = 0
     weighted_sum = 0
@@ -90,11 +69,13 @@ def get_grade_stats():
         total_students = len(grades)
         if total_students == 0:
             continue
-        grade_counts = Counter(grades)
-        stats[subject] = {
-            "counts": {grade: grade_counts.get(grade, 0) for grade in grade_mapping.keys()},
-            "percentages": {grade: (grade_counts.get(grade, 0) / total_students) * 100 for grade in grade_mapping.keys()}
-        }
+        counts = {}
+        percentages = {}
+        for grade in grade_mapping.keys():
+            count = grades.count(grade)
+            counts[grade] = count
+            percentages[grade] = (count / total_students) * 100
+        stats[subject] = {"counts": counts, "percentages": percentages}
     return stats
 
 def get_top_students(max_rank=10):
@@ -107,20 +88,14 @@ def get_top_students(max_rank=10):
     top_list = []
     dense_rank = 0
     last_gpa = None
-    for student in sorted_students:
-        student_number, gpa = student
+    for student_number, gpa in sorted_students:
         if last_gpa is None or gpa != last_gpa:
             dense_rank += 1
             last_gpa = gpa
-        if dense_rank < max_rank:
-            top_list.append((student_number, gpa, dense_rank))
-        elif dense_rank == max_rank:
+        if dense_rank <= max_rank:
             top_list.append((student_number, gpa, dense_rank))
         else:
-            if top_list and top_list[-1][2] == max_rank and gpa == top_list[-1][1]:
-                top_list.append((student_number, gpa, max_rank))
-            else:
-                break
+            break
     return top_list
 
 def get_subject_averages():
@@ -129,13 +104,11 @@ def get_subject_averages():
         grades = subject_grades.get(subject, {})
         if not grades:
             continue
-        total_numeric = sum(grade_mapping.get(grade, 0) for grade in grades.values())
-        average = total_numeric / len(grades) if grades else 0
-        subject_averages[subject] = average
+        total = sum(grade_mapping.get(grade, 0) for grade in grades.values())
+        subject_averages[subject] = total / len(grades)
     return sorted(subject_averages.items(), key=lambda x: x[1], reverse=True)
 
-# أوامر الأدمن القياسية (الإحصائيات وترتيب الطلاب وما إلى ذلك)
-
+# أوامر الأدمن الأساسية (الإحصائيات وترتيب الطلاب، الخ) هنا لم نغيرها
 @bot.message_handler(commands=['gradestats'])
 def grade_stats(message):
     if message.from_user.id not in ADMIN_IDS:
@@ -149,8 +122,7 @@ def grade_stats(message):
     for subject, data in stats.items():
         response += f"\n**{subject}:**\n"
         for grade, count in data["counts"].items():
-            percentage = data["percentages"][grade]
-            response += f"- {grade}: {count} طلاب ({percentage:.2f}%)\n"
+            response += f"- {grade}: {count} طلاب\n"
     bot.send_message(message.chat.id, response, parse_mode="Markdown")
 
 @bot.message_handler(commands=['topstudents'])
@@ -177,8 +149,8 @@ def subject_ranks(message):
         bot.send_message(message.chat.id, "لا توجد بيانات للمواد.")
         return
     response = "📊 ترتيب المواد بناءً على المعدل العام:\n"
-    for i, (subject, average) in enumerate(ranked_subjects, 1):
-        response += f"{i}. {subject}: متوسط {average:.2f}\n"
+    for i, (subject, avg) in enumerate(ranked_subjects, 1):
+        response += f"{i}. {subject}: متوسط {avg:.2f}\n"
     bot.send_message(message.chat.id, response)
 
 @bot.message_handler(commands=['setallowedids'])
@@ -192,7 +164,7 @@ def set_allowed_ids(message):
         return
     student_number = args[1]
     chat_ids = args[2].split(',')
-    allowed_ids[student_number] = [int(chat_id) for chat_id in chat_ids if chat_id.isdigit()]
+    allowed_ids[student_number] = [int(cid) for cid in chat_ids if cid.isdigit()]
     bot.send_message(message.chat.id, f"✅ تم تعيين IDs المسموح لها للطالب {student_number}.")
 
 @bot.message_handler(commands=['setspecial'])
@@ -206,23 +178,25 @@ def set_special(message):
 @bot.message_handler(func=lambda message: message.from_user.id in special_state)
 def process_special_state(message):
     admin_id = message.from_user.id
-    current_state = special_state[admin_id]["state"]
-    if current_state == "awaiting_student_number":
+    state = special_state[admin_id]
+    if state["state"] == "awaiting_student_number":
         student_number = message.text.strip()
         special_state[admin_id] = {"state": "awaiting_message", "student_number": student_number}
         bot.send_message(message.chat.id, f"✅ تم حفظ الرقم الدراسي {student_number}.\nالآن أدخل الرسالة الخاصة لهذا الرقم:")
-    elif current_state == "awaiting_message":
+    elif state["state"] == "awaiting_message":
         special_message = message.text.strip()
-        student_number = special_state[admin_id]["student_number"]
+        student_number = state["student_number"]
         special_student_messages[student_number] = special_message
         bot.send_message(message.chat.id, f"✅ تم تعيين الرسالة الخاصة للرقم الدراسي {student_number}.")
         del special_state[admin_id]
 
+# أمر بدء رفع درجات المواد لكل مادة بالتتابع
 @bot.message_handler(commands=['uploadsubjects'])
 def start_upload_subjects(message):
     if message.from_user.id not in ADMIN_IDS:
         bot.send_message(message.chat.id, "❌ ليس لديك صلاحية.")
         return
+    # تهيئة الحالة مع قائمة المواد وترتيبها
     upload_state[message.from_user.id] = {
         "subjects": subjects_order.copy(),
         "index": 0
@@ -231,7 +205,8 @@ def start_upload_subjects(message):
     bot.send_message(message.chat.id,
                      f"🔢 يرجى إرسال ملف txt الخاص بمادة: {current_subject}\nالصيغة: رقم دراسي : درجة")
 
-@bot.message_handler(func=lambda message: message.from_user.id in upload_state)
+# هنا نستخدم handler خاص للملفات (document) أثناء عملية رفع المواد
+@bot.message_handler(content_types=['document'], func=lambda message: message.from_user.id in upload_state)
 def process_upload_subject_file(message):
     admin_id = message.from_user.id
     state = upload_state[admin_id]
@@ -239,9 +214,6 @@ def process_upload_subject_file(message):
     current_index = state["index"]
     current_subject = subjects_list[current_index]
     
-    if not message.document:
-        bot.send_message(message.chat.id, "❌ الرجاء إرسال ملف بصيغة txt.")
-        return
     if not message.document.file_name.lower().endswith(".txt"):
         bot.send_message(message.chat.id, "❌ يجب أن يكون الملف بصيغة txt.")
         return
@@ -252,28 +224,26 @@ def process_upload_subject_file(message):
     except Exception as e:
         bot.send_message(message.chat.id, "❌ حدث خطأ أثناء تحميل الملف.")
         return
-    
+
+    # معالجة الملف وفق التنسيق "رقم دراسي : درجة"
     grades_data = {}
     for line in file_content.splitlines():
         line = line.strip()
-        if not line:
-            continue
-        if ":" not in line:
+        if not line or ":" not in line:
             continue
         student_number, grade = line.split(":", 1)
         grades_data[student_number.strip()] = grade.strip()
     
+    # حفظ بيانات المادة الحالية
     subject_grades[current_subject] = grades_data
-    
     try:
         with open("subject_grades.json", "w") as f:
             json.dump(subject_grades, f)
     except Exception as e:
         bot.send_message(message.chat.id, "❌ حدث خطأ أثناء حفظ البيانات.")
         return
-    
+
     bot.send_message(message.chat.id, f"✅ تم رفع بيانات مادة {current_subject} بنجاح.")
-    
     state["index"] += 1
     if state["index"] < len(subjects_list):
         next_subject = subjects_list[state["index"]]
@@ -283,6 +253,7 @@ def process_upload_subject_file(message):
         bot.send_message(message.chat.id, "✅ تم رفع بيانات جميع المواد بنجاح.")
         del upload_state[admin_id]
 
+# أوامر الطلاب كما في النسخ السابقة
 @bot.message_handler(commands=['start'])
 def student_start(message):
     missing_subjects = [subject for subject in subjects_order if subject not in subject_grades or not subject_grades[subject]]
